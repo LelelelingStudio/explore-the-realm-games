@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Realm Explorer - Top-Down Adventure</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        .font-pixel {
+            font-family: 'Press Start 2P', monospace;
+        }
+        /* Custom Scrollbars for Modals */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.5);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.8);
+        }
+        /* Glassmorphism Styling */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .btn-retro {
+            transition: all 0.15s ease;
+            box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
+        }
+        .btn-retro:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 overflow-hidden h-screen w-screen flex flex-col justify-between select-none">
+
+    <!-- TOP HEADER / HUD BAR -->
+    <header class="absolute top-0 left-0 right-0 z-20 p-3 sm:p-4 flex justify-between items-center pointer-events-none">
+        <!-- Biome Badge & Stats -->
+        <div class="glass-panel rounded-2xl px-4 py-2.5 flex items-center gap-4 pointer-events-auto shadow-xl">
+            <div class="flex items-center gap-2">
+                <span id="biome-icon" class="text-emerald-400 text-lg sm:text-xl"><i class="fa-solid font-tree"></i></span>
+                <div>
+                    <div id="biome-title" class="font-pixel text-[10px] sm:text-xs text-emerald-300 uppercase tracking-wider">Whispering Woods</div>
+                    <div class="text-[11px] text-slate-400 flex items-center gap-2">
+                        <span>Explored: <strong id="exploration-pct" class="text-white">0%</strong></span>
+                    </div>
+                </div>
+            </div>
+            <div class="h-8 w-px bg-slate-700/60 hidden sm:block"></div>
+            <!-- Relic Counter -->
+            <div class="hidden sm:flex items-center gap-2 text-amber-400">
+                <i class="fa-solid fa-gem text-sm"></i>
+                <span class="text-xs font-semibold"><span id="hud-relic-count">0</span> / <span id="hud-relic-total">12</span> Relics</span>
+            </div>
+        </div>
+
+        <!-- Action Buttons (Codex, Map, Sound) -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+            <button id="btn-codex" class="btn-retro bg-indigo-600 hover:bg-indigo-500 text-white p-2.5 sm:px-4 sm:py-2.5 rounded-xl font-medium text-xs flex items-center gap-2 shadow-lg">
+                <i class="fa-solid fa-book-bookmark"></i>
+                <span class="hidden sm:inline">Codex & Quest</span>
+            </button>
+            <button id="btn-map" class="btn-retro bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 sm:px-4 sm:py-2.5 rounded-xl font-medium text-xs flex items-center gap-2 border border-slate-700">
+                <i class="fa-solid fa-map-location-dot"></i>
+                <span class="hidden sm:inline">World Map</span>
+            </button>
+            <button id="btn-sound" class="btn-retro bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 sm:p-2.5 rounded-xl font-medium text-xs border border-slate-700">
+                <i id="sound-icon" class="fa-solid fa-volume-high"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN GAME CANVAS CONTAINER -->
+    <main class="relative w-full h-full flex-grow overflow-hidden bg-slate-900">
+        <canvas id="gameCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+
+        <!-- Notification / Toast Popup -->
+        <div id="toast-container" class="absolute bottom-24 sm:bottom-8 left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-col items-center gap-2"></div>
+
+        <!-- Interactive Dialog Overlay -->
+        <div id="dialog-box" class="absolute bottom-20 sm:bottom-8 left-1/2 -translate-x-1/2 z-30 glass-panel rounded-2xl p-4 sm:p-6 w-[92%] max-w-xl hidden shadow-2xl border-indigo-500/30 transition-all duration-200">
+            <div class="flex items-start gap-4">
+                <div id="dialog-avatar" class="w-12 h-12 rounded-xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300 text-xl flex-shrink-0">
+                    <i class="fa-solid fa-scroll"></i>
+                </div>
+                <div class="flex-grow">
+                    <h4 id="dialog-title" class="text-sm font-bold text-indigo-300 font-pixel mb-1">Ancient Shrine</h4>
+                    <p id="dialog-text" class="text-xs sm:text-sm text-slate-200 leading-relaxed">The inscriptions whisper of forgotten crystals hidden deep within the Crystal Caverns to the east...</p>
+                </div>
+            </div>
+            <div class="mt-4 flex justify-end">
+                <button id="dialog-close" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold">Close (E)</button>
+            </div>
+        </div>
+
+        <!-- Mini-Map Overlay Floating Top Right below header -->
+        <div class="absolute top-20 right-4 z-10 glass-panel p-1.5 rounded-2xl shadow-xl hidden sm:block border border-slate-700/50">
+            <canvas id="miniMapCanvas" width="140" height="140" class="rounded-xl block bg-slate-950"></canvas>
+            <div class="text-[9px] text-center text-slate-400 mt-1 font-mono">MINIMAP</div>
+        </div>
+    </main>
+
+    <!-- MOBILE TOUCH CONTROLS (DPAD & INTERACT) -->
+    <div class="absolute bottom-4 left-4 z-20 sm:hidden flex items-center justify-between right-4 pointer-events-none">
+        <!-- Virtual D-Pad -->
+        <div class="relative w-36 h-36 bg-slate-900/60 backdrop-blur-md rounded-full border border-slate-700/50 p-2 pointer-events-auto">
+            <button id="btn-up" class="absolute top-1 left-1/2 -translate-x-1/2 w-10 h-10 bg-slate-800/80 active:bg-indigo-600 text-white rounded-lg flex items-center justify-center"><i class="fa-solid fa-chevron-up"></i></button>
+            <button id="btn-down" class="absolute bottom-1 left-1/2 -translate-x-1/2 w-10 h-10 bg-slate-800/80 active:bg-indigo-600 text-white rounded-lg flex items-center justify-center"><i class="fa-solid fa-chevron-down"></i></button>
+            <button id="btn-left" class="absolute left-1 top-1/2 -translate-y-1/2 w-10 h-10 bg-slate-800/80 active:bg-indigo-600 text-white rounded-lg flex items-center justify-center"><i class="fa-solid fa-chevron-left"></i></button>
+            <button id="btn-right" class="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 bg-slate-800/80 active:bg-indigo-600 text-white rounded-lg flex items-center justify-center"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+
+        <!-- Action / Interact Button -->
+        <button id="btn-interact-mobile" class="w-16 h-16 bg-indigo-600/90 active:bg-indigo-500 text-white rounded-full font-bold shadow-lg border border-indigo-400/50 flex flex-col items-center justify-center pointer-events-auto">
+            <i class="fa-solid fa-hand text-lg"></i>
+            <span class="text-[9px] mt-0.5">INTERACT</span>
+        </button>
+    </div>
+
+    <!-- MODAL: CODEX & QUEST LOGBOOK -->
+    <div id="modal-codex" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-panel rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden border border-slate-700 shadow-2xl">
+            <!-- Modal Header -->
+            <div class="p-5 border-b border-slate-800 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="p-2.5 bg-indigo-600/20 text-indigo-400 rounded-xl"><i class="fa-solid fa-book text-xl"></i></div>
+                    <div>
+                        <h2 class="text-base font-bold text-white font-pixel">Explorer's Codex</h2>
+                        <p class="text-xs text-slate-400">Discovered relics, flora samples, and ancient lore notes.</p>
+                    </div>
+                </div>
+                <button class="close-modal text-slate-400 hover:text-white text-xl p-2"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex border-b border-slate-800/80 bg-slate-900/40 px-4">
+                <button id="tab-relics" class="px-4 py-3 text-xs font-semibold text-indigo-400 border-b-2 border-indigo-500">Relics & Flora (<span id="relic-tab-count">0/12</span>)</button>
+                <button id="tab-lore" class="px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200">Lore Shrines (<span id="lore-tab-count">0/6</span>)</button>
+                <button id="tab-stats" class="px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200">Journal Stats</button>
+            </div>
+
+            <!-- Tab Content Body -->
+            <div class="p-6 overflow-y-auto flex-grow space-y-4">
+                <!-- Relics Grid View -->
+                <div id="view-relics" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+
+                <!-- Lore List View -->
+                <div id="view-lore" class="space-y-3 hidden"></div>
+
+                <!-- Stats View -->
+                <div id="view-stats" class="grid grid-cols-2 gap-4 hidden">
+                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+                        <div class="text-slate-400 text-xs mb-1">Forest Biome Discovery</div>
+                        <div id="stat-forest-pct" class="text-xl font-bold text-emerald-400">0%</div>
+                    </div>
+                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+                        <div class="text-slate-400 text-xs mb-1">Caverns Biome Discovery</div>
+                        <div id="stat-caverns-pct" class="text-xl font-bold text-cyan-400">0%</div>
+                    </div>
+                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+                        <div class="text-slate-400 text-xs mb-1">Steps Taken</div>
+                        <div id="stat-steps" class="text-xl font-bold text-amber-400">0</div>
+                    </div>
+                    <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+                        <div class="text-slate-400 text-xs mb-1">Chests Opened</div>
+                        <div id="stat-chests" class="text-xl font-bold text-purple-400">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: FULL WORLD MAP -->
+    <div id="modal-map" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-panel rounded-3xl w-full max-w-3xl flex flex-col overflow-hidden border border-slate-700 shadow-2xl">
+            <div class="p-5 border-b border-slate-800 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="p-2.5 bg-emerald-600/20 text-emerald-400 rounded-xl"><i class="fa-solid fa-map text-xl"></i></div>
+                    <div>
+                        <h2 class="text-base font-bold text-white font-pixel">World Map</h2>
+                        <p class="text-xs text-slate-400">Cartography of Whispering Woods & Crystal Glade Caverns</p>
+                    </div>
+                </div>
+                <button class="close-modal text-slate-400 hover:text-white text-xl p-2"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6 flex flex-col items-center justify-center">
+                <canvas id="fullMapCanvas" width="512" height="256" class="rounded-2xl border border-slate-700 bg-slate-950 max-w-full h-auto shadow-inner"></canvas>
+                <div class="flex items-center gap-6 mt-4 text-xs text-slate-400">
+                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> Whispering Forest</span>
+                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-cyan-500 inline-block"></span> Crystal Caverns</span>
+                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-400 inline-block"></span> Player Location</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME LOGIC JAVASCRIPT -->
+    <script>
+        /**
+         * REALM EXPLORER - TOP DOWN 2D ENGINE
+         * Features: Biomes, Procedural/Tile Map, Fog of War, Lighting, Audio Synth, Modals.
+         */
+
+        // Canvas Setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const miniCanvas = document.getElementById('miniMapCanvas');
+        const miniCtx = miniCanvas.getContext('2d');
+        const fullCanvas = document.getElementById('fullMapCanvas');
+        const fullCtx = fullCanvas.getContext('2d');
+
+        // Map & Tile Constants
+        const TILE_SIZE = 32;
+        const MAP_COLS = 64; // Total width in tiles (32 Whispering Forest + 32 Crystal Caverns)
+        const MAP_ROWS = 32; // Total height in tiles
+        const WORLD_WIDTH = MAP_COLS * TILE_SIZE;
+        const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE;
+
+        // Tile Type Definitions
+        const TILE = {
+            GRASS: 0,
+            FOREST_TREE: 1,
+            WATER: 2,
+            FLOWER_PATCH: 3,
+            CAVERN_FLOOR: 4,
+            CAVERN_WALL: 5,
+            CRYSTAL_NODE: 6,
+            BIOME_GATEWAY: 7
+        };
+
+        // Biome Constants
+        const BIOMES = {
+            FOREST: { name: "Whispering Forest", color: "#10b981", icon: "fa-tree" },
+            CAVERNS: { name: "Crystal Glade Caverns", color: "#06b6d4", icon: "fa-gem" }
+        };
+
+        // Game World & Map Array (0: tileType, 1: explored standard fog, 2: visible current light)
+        let tileMap = [];
+        let fogMap = []; // 0 = Unexplored (black), 1 = Explored (dim), 2 = Currently Visible
+
+        // Player State
+        const player = {
+            x: 8 * TILE_SIZE + 16,
+            y: 16 * TILE_SIZE + 16,
+            radius: 12,
+            speed: 3.2,
+            direction: 'down',
+            isMoving: false,
+            animFrame: 0,
+            steps: 0,
+            torchRadius: 160 // Lighting radius in px
+        };
+
+        // Key State Tracker
+        const keys = {
+            w: false, a: false, s: false, d: false,
+            ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false,
+            e: false
+        };
+
+        // Game Interactive Entities
+        let relics = [];
+        let loreShrines = [];
+        let chests = [];
+        let npcs = [];
+        let particles = [];
+
+        // Game Ambient / Time Cycle State
+        let dayTime = 0; // 0 to 1 cycle
+        let ambientLight = 1.0;
+
+        // Sound Engine (Web Audio API Synthesizer - Zero External Assets)
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playTone(freq, type = 'sine', duration = 0.15, vol = 0.1) {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e) {}
+            }
+            playPickup() {
+                if (this.muted) return;
+                this.init();
+                this.playTone(523.25, 'triangle', 0.1, 0.15); // C5
+                setTimeout(() => this.playTone(659.25, 'triangle', 0.1, 0.15), 80); // E5
+                setTimeout(() => this.playTone(783.99, 'triangle', 0.2, 0.15), 160); // G5
+            }
+            playLoreDiscover() {
+                if (this.muted) return;
+                this.init();
+                this.playTone(440, 'sine', 0.2, 0.12);
+                setTimeout(() => this.playTone(554.37, 'sine', 0.2, 0.12), 120);
+                setTimeout(() => this.playTone(659.25, 'sine', 0.3, 0.12), 240);
+            }
+            playChestOpen() {
+                if (this.muted) return;
+                this.init();
+                this.playTone(300, 'square', 0.1, 0.1);
+                setTimeout(() => this.playTone(450, 'square', 0.2, 0.1), 90);
+            }
+            playStep() {
+                if (this.muted || Math.random() > 0.3) return;
+                this.init();
+                this.playTone(120 + Math.random() * 40, 'sine', 0.05, 0.02);
+            }
+        }
+        const sound = new SoundEngine();
+
+        // Initialize World & Generator
+        function generateWorld() {
+            tileMap = new Array(MAP_ROWS).fill(0).map(() => new Array(MAP_COLS).fill(0));
+            fogMap = new Array(MAP_ROWS).fill(0).map(() => new Array(MAP_COLS).fill(0));
+
+            for (let r = 0; r < MAP_ROWS; r++) {
+                for (let c = 0; c < MAP_COLS; c++) {
+                    // Outer border wall
+                    if (r === 0 || r === MAP_ROWS - 1 || c === 0 || c === MAP_COLS - 1) {
+                        tileMap[r][c] = (c < 32) ? TILE.FOREST_TREE : TILE.CAVERN_WALL;
+                        continue;
+                    }
+
+                    // Biome 1: Whispering Forest (Cols 0 - 30)
+                    if (c < 31) {
+                        const rand = Math.random();
+                        if (rand < 0.15) tileMap[r][c] = TILE.FOREST_TREE;
+                        else if (rand < 0.22) tileMap[r][c] = TILE.FLOWER_PATCH;
+                        else if (rand < 0.25 && r > 5 && r < 25) tileMap[r][c] = TILE.WATER;
+                        else tileMap[r][c] = TILE.GRASS;
+                    }
+                    // Transition / Gateway Wall (Col 31)
+                    else if (c === 31) {
+                        if (r === 15 || r === 16) {
+                            tileMap[r][c] = TILE.BIOME_GATEWAY;
+                        } else {
+                            tileMap[r][c] = TILE.CAVERN_WALL;
+                        }
+                    }
+                    // Biome 2: Crystal Glade Caverns (Cols 32 - 63)
+                    else {
+                        const rand = Math.random();
+                        if (rand < 0.20) tileMap[r][c] = TILE.CAVERN_WALL;
+                        else if (rand < 0.28) tileMap[r][c] = TILE.CRYSTAL_NODE;
+                        else tileMap[r][c] = TILE.CAVERN_FLOOR;
+                    }
+                }
+            }
+
+            // Populate Relics (6 in Forest, 6 in Caverns)
+            relics = [
+                // Forest Relics
+                { id: 1, name: "Sylvan Flora Seed", biome: "Forest", x: 5*32+16, y: 5*32+16, icon: "fa-seedling", desc: "A glowing seed that responds to gentle whispers of wind.", collected: false },
+                { id: 2, name: "Ancient Jade Leaf", biome: "Forest", x: 12*32+16, y: 8*32+16, icon: "fa-leaf", desc: "A petrified leaf engraved with ancient woodland runes.", collected: false },
+                { id: 3, name: "Sunfire Orchid", biome: "Forest", x: 22*32+16, y: 4*32+16, icon: "fa-sun", desc: "Radiates gentle warmth even in ambient darkness.", collected: false },
+                { id: 4, name: "Moonlit Feather", biome: "Forest", x: 6*32+16, y: 22*32+16, icon: "fa-feather", desc: "Left behind by a legendary silver owl.", collected: false },
+                { id: 5, name: "Mossy Compass", biome: "Forest", x: 25*32+16, y: 26*32+16, icon: "fa-compass", desc: "Its needle perpetually points toward secret ley-lines.", collected: false },
+                { id: 6, name: "Amber Beetle", biome: "Forest", x: 18*32+16, y: 15*32+16, icon: "fa-bug", desc: "Encased in thousand-year-old golden resin.", collected: false },
+
+                // Cavern Relics
+                { id: 7, name: "Prismatic Shard", biome: "Caverns", x: 36*32+16, y: 6*32+16, icon: "fa-diamond", desc: "Reflects light into dazzling rainbows across dark cave walls.", collected: false },
+                { id: 8, name: "Deep Echo Geode", biome: "Caverns", x: 45*32+16, y: 12*32+16, icon: "fa-compact-disc", desc: "Humming gently with subterranean resonance.", collected: false },
+                { id: 9, name: "Bioluminescent Spore", biome: "Caverns", x: 55*32+16, y: 8*32+16, icon: "fa-disease", desc: "Faint blue spores that float lazily in cave breezes.", collected: false },
+                { id: 10, name: "Glow-Pebble Cluster", biome: "Caverns", x: 38*32+16, y: 24*32+16, icon: "fa-cubes", desc: "Crystals that absorb torchlight and shine brighter.", collected: false },
+                { id: 11, name: "Subterranean Fossil", biome: "Caverns", x: 48*32+16, y: 22*32+16, icon: "fa-bone", desc: "Remnants of an ancient leviathan that swam underground.", collected: false },
+                { id: 12, name: "Starlight Crystal", biome: "Caverns", x: 58*32+16, y: 25*32+16, icon: "fa-star", desc: "A rare crystal said to hold captured starlight.", collected: false }
+            ];
+
+            // Populate Lore Shrines (3 in Forest, 3 in Caverns)
+            loreShrines = [
+                { id: 1, x: 10*32+16, y: 12*32+16, title: "Shrine of Roots", text: "The Whispering Forest was planted by the First Travelers. Their memory lives in every rustling branch.", read: false },
+                { id: 2, x: 26*32+16, y: 8*32+16, title: "Gateway Tablet", text: "Beyond the stone arch lies the Crystal Glade. Beware the glowing dark.", read: false },
+                { id: 3, x: 14*32+16, y: 25*32+16, title: "Wanderer's Marker", text: "Rest here traveler. The forest rewards those who explore every quiet glade.", read: false },
+                { id: 4, x: 35*32+16, y: 18*32+16, title: "Crystal Obelisk", text: "The crystals are not mere rocks; they store the history of the earth below.", read: false },
+                { id: 5, x: 50*32+16, y: 5*32+16, title: "Echo Monolith", text: "Listen carefully to the cavern echoes. They guide you toward lost artifacts.", read: false },
+                { id: 6, x: 60*32+16, y: 16*32+16, title: "Glade Sanctum", text: "You have reached the deepest depths of the crystal realm. Few explore this far.", read: false }
+            ];
+
+            // Chests
+            chests = [
+                { id: 1, x: 4*32+16, y: 18*32+16, opened: false, reward: "Explorer's Energy" },
+                { id: 2, x: 28*32+16, y: 22*32+16, opened: false, reward: "Luminous Lantern Upgrade" },
+                { id: 3, x: 42*32+16, y: 27*32+16, opened: false, reward: "Ancient Crystal Dust" },
+                { id: 4, x: 57*32+16, y: 4*32+16, opened: false, reward: "Star Map Fragment" }
+            ];
+
+            // NPC Travelers
+            npcs = [
+                { x: 8*32+16, y: 15*32+16, name: "Elder Oakhaven", title: "Forest Guide", text: "Welcome wanderer! Explore the Whispering Forest and collect all 6 flora relics. Passage to the Caverns lies east!" },
+                { x: 34*32+16, y: 15*32+16, name: "Lumina the Gemseeker", title: "Cavern Scholar", text: "Greetings! The Crystal Glade is rich with bioluminescent treasures. Keep your lantern bright!" }
+            ];
+        }
+
+        // Window Resize Handling
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // Inputs Setup
+        window.addEventListener('keydown', (e) => {
+            if (keys.hasOwnProperty(e.key)) {
+                keys[e.key] = true;
+            }
+            if (e.key === 'e' || e.key === 'E' || e.key === ' ') {
+                handleInteraction();
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.key)) {
+                keys[e.key] = false;
+            }
+        });
+
+        // Touch Control Listeners
+        const setupTouchBtn = (id, keyName) => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+        };
+        setupTouchBtn('btn-up', 'w');
+        setupTouchBtn('btn-down', 's');
+        setupTouchBtn('btn-left', 'a');
+        setupTouchBtn('btn-right', 'd');
+        
+        document.getElementById('btn-interact-mobile').addEventListener('click', () => {
+            handleInteraction();
+        });
+
+        // Collision Logic
+        function isSolid(tileX, tileY) {
+            if (tileX < 0 || tileX >= MAP_COLS || tileY < 0 || tileY >= MAP_ROWS) return true;
+            const tile = tileMap[tileY][tileX];
+            return tile === TILE.FOREST_TREE || tile === TILE.CAVERN_WALL || tile === TILE.WATER;
+        }
+
+        function checkCollision(nextX, nextY) {
+            const r = player.radius - 2;
+            const corners = [
+                { x: nextX - r, y: nextY - r },
+                { x: nextX + r, y: nextY - r },
+                { x: nextX - r, y: nextY + r },
+                { x: nextX + r, y: nextY + r }
+            ];
+
+            for (let pt of corners) {
+                const tX = Math.floor(pt.x / TILE_SIZE);
+                const tY = Math.floor(pt.y / TILE_SIZE);
+                if (isSolid(tX, tY)) return true;
+            }
+            return false;
+        }
+
+        // Fog of War & Discovery Engine
+        function updateFogOfWar() {
+            const pTileX = Math.floor(player.x / TILE_SIZE);
+            const pTileY = Math.floor(player.y / TILE_SIZE);
+            const radius = 5; // Radius of visibility in tiles
+
+            for (let r = Math.max(0, pTileY - radius); r <= Math.min(MAP_ROWS - 1, pTileY + radius); r++) {
+                for (let c = Math.max(0, pTileX - radius); c <= Math.min(MAP_COLS - 1, pTileX + radius); c++) {
+                    const dist = Math.hypot(c - pTileX, r - pTileY);
+                    if (dist <= radius) {
+                        fogMap[r][c] = 2; // Fully visible right now
+                    } else if (fogMap[r][c] === 2) {
+                        fogMap[r][c] = 1; // Mark as previously explored
+                    }
+                }
+            }
+        }
+
+        // Player Motion Update
+        function updatePlayer() {
+            let dx = 0;
+            let dy = 0;
+
+            if (keys.w || keys.ArrowUp) dy -= 1;
+            if (keys.s || keys.ArrowDown) dy += 1;
+            if (keys.a || keys.ArrowLeft) dx -= 1;
+            if (keys.d || keys.ArrowRight) dx += 1;
+
+            // Normalize diagonal speed
+            if (dx !== 0 && dy !== 0) {
+                dx *= 0.7071;
+                dy *= 0.7071;
+            }
+
+            if (dx !== 0 || dy !== 0) {
+                player.isMoving = true;
+                player.steps++;
+                sound.playStep();
+
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    player.direction = dx > 0 ? 'right' : 'left';
+                } else {
+                    player.direction = dy > 0 ? 'down' : 'up';
+                }
+
+                const nextX = player.x + dx * player.speed;
+                const nextY = player.y + dy * player.speed;
+
+                if (!checkCollision(nextX, player.y)) player.x = nextX;
+                if (!checkCollision(player.x, nextY)) player.y = nextY;
+
+                // Create gentle footstep particles occasionally
+                if (Math.random() < 0.2) {
+                    particles.push({
+                        x: player.x,
+                        y: player.y + 10,
+                        vx: (Math.random() - 0.5) * 0.4,
+                        vy: (Math.random() - 0.5) * 0.4,
+                        life: 1.0,
+                        color: player.x < 31 * TILE_SIZE ? '#a7f3d0' : '#c084fc',
+                        size: 2
+                    });
+                }
+            } else {
+                player.isMoving = false;
+            }
+
+            updateFogOfWar();
+            updateHUDAndBiome();
+        }
+
+        // Interactive Objects Triggering
+        function handleInteraction() {
+            // Check Relics
+            for (let relic of relics) {
+                if (!relic.collected && Math.hypot(player.x - relic.x, player.y - relic.y) < 32) {
+                    relic.collected = true;
+                    sound.playPickup();
+                    showToast(`Discovered Relic: ${relic.name}!`, "fa-gem", "text-amber-400");
+                    updateCodexUI();
+                    return;
+                }
+            }
+
+            // Check Lore Shrines
+            for (let shrine of loreShrines) {
+                if (Math.hypot(player.x - shrine.x, player.y - shrine.y) < 36) {
+                    shrine.read = true;
+                    sound.playLoreDiscover();
+                    openDialog(shrine.title, shrine.text, "fa-scroll");
+                    updateCodexUI();
+                    return;
+                }
+            }
+
+            // Check Chests
+            for (let chest of chests) {
+                if (!chest.opened && Math.hypot(player.x - chest.x, player.y - chest.y) < 36) {
+                    chest.opened = true;
+                    sound.playChestOpen();
+                    showToast(`Opened Chest: Found ${chest.reward}!`, "fa-box-open", "text-purple-400");
+                    updateCodexUI();
+                    return;
+                }
+            }
+
+            // Check NPCs
+            for (let npc of npcs) {
+                if (Math.hypot(player.x - npc.x, player.y - npc.y) < 40) {
+                    sound.playLoreDiscover();
+                    openDialog(`${npc.name} (${npc.title})`, npc.text, "fa-user-astronaut");
+                    return;
+                }
+            }
+        }
+
+        // Dialog UI Manager
+        function openDialog(title, text, iconClass) {
+            document.getElementById('dialog-title').innerText = title;
+            document.getElementById('dialog-text').innerText = text;
+            document.getElementById('dialog-avatar').innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+            document.getElementById('dialog-box').classList.remove('hidden');
+        }
+
+        document.getElementById('dialog-close').addEventListener('click', () => {
+            document.getElementById('dialog-box').classList.add('hidden');
+        });
+
+        // Toast Notification System
+        function showToast(msg, icon = "fa-star", textCol = "text-indigo-400") {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `glass-panel px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-3 text-xs border border-slate-700/60 animate-bounce`;
+            toast.innerHTML = `<i class="fa-solid ${icon} ${textCol} text-sm"></i><span class="text-white font-medium">${msg}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.5s ease';
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
+        }
+
+        // UI & Biome Tracker
+        function updateHUDAndBiome() {
+            const isCavern = player.x >= 31 * TILE_SIZE;
+            const biome = isCavern ? BIOMES.CAVERNS : BIOMES.FOREST;
+
+            document.getElementById('biome-title').innerText = biome.name;
+            document.getElementById('biome-title').className = `font-pixel text-[10px] sm:text-xs uppercase tracking-wider ${isCavern ? 'text-cyan-300' : 'text-emerald-300'}`;
+            document.getElementById('biome-icon').innerHTML = `<i class="fa-solid ${biome.icon}"></i>`;
+            document.getElementById('biome-icon').className = `text-lg sm:text-xl ${isCavern ? 'text-cyan-400' : 'text-emerald-400'}`;
+
+            // Calculate overall exploration %
+            let totalTiles = MAP_COLS * MAP_ROWS;
+            let exploredCount = 0;
+            let forestExplored = 0, forestTotal = 31 * MAP_ROWS;
+            let cavernExplored = 0, cavernTotal = (MAP_COLS - 31) * MAP_ROWS;
+
+            for (let r = 0; r < MAP_ROWS; r++) {
+                for (let c = 0; c < MAP_COLS; c++) {
+                    if (fogMap[r][c] > 0) {
+                        exploredCount++;
+                        if (c < 31) forestExplored++;
+                        else cavernExplored++;
+                    }
+                }
+            }
+
+            const totalPct = Math.floor((exploredCount / totalTiles) * 100);
+            document.getElementById('exploration-pct').innerText = `${totalPct}%`;
+
+            const forestPct = Math.floor((forestExplored / forestTotal) * 100);
+            const cavernPct = Math.floor((cavernExplored / cavernTotal) * 100);
+
+            document.getElementById('stat-forest-pct').innerText = `${forestPct}%`;
+            document.getElementById('stat-caverns-pct').innerText = `${cavernPct}%`;
+            document.getElementById('stat-steps').innerText = player.steps;
+            document.getElementById('stat-chests').innerText = `${chests.filter(c => c.opened).length} / ${chests.length}`;
+
+            // Relic Counter
+            const collectedRelics = relics.filter(r => r.collected).length;
+            document.getElementById('hud-relic-count').innerText = collectedRelics;
+            document.getElementById('hud-relic-total').innerText = relics.length;
+        }
+
+        // Particle System Engine
+        function updateAndDrawParticles(camX, camY) {
+            // Spawn Ambient Biome Particles
+            if (Math.random() < 0.3) {
+                const inCavern = player.x >= 31 * TILE_SIZE;
+                particles.push({
+                    x: player.x + (Math.random() - 0.5) * canvas.width,
+                    y: player.y + (Math.random() - 0.5) * canvas.height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: inCavern ? -Math.random() * 0.5 : Math.random() * 0.3 + 0.1,
+                    life: 1.0,
+                    color: inCavern ? '#38bdf8' : '#34d399',
+                    size: inCavern ? Math.random() * 2 + 1 : Math.random() * 3 + 1
+                });
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.01;
+
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = p.life * 0.7;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x - camX, p.y - camY, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Rendering Engine
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Camera offset (Centered on player)
+            const camX = player.x - canvas.width / 2;
+            const camY = player.y - canvas.height / 2;
+
+            // Calculate visible tile ranges
+            const startCol = Math.max(0, Math.floor(camX / TILE_SIZE));
+            const endCol = Math.min(MAP_COLS - 1, Math.ceil((camX + canvas.width) / TILE_SIZE));
+            const startRow = Math.max(0, Math.floor(camY / TILE_SIZE));
+            const endRow = Math.min(MAP_ROWS - 1, Math.ceil((camY + canvas.height) / TILE_SIZE));
+
+            // Render Tiles
+            for (let r = startRow; r <= endRow; r++) {
+                for (let c = startCol; c <= endCol; c++) {
+                    const screenX = c * TILE_SIZE - camX;
+                    const screenY = r * TILE_SIZE - camY;
+                    const tile = tileMap[r][c];
+
+                    // Draw Tile Base Colors
+                    switch (tile) {
+                        case TILE.GRASS:
+                            ctx.fillStyle = '#15803d';
+                            ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                            // Grass blades texture
+                            ctx.fillStyle = '#22c55e';
+                            ctx.fillRect(screenX + 6, screenY + 8, 2, 4);
+                            ctx.fillRect(screenX + 20, screenY + 18, 2, 5);
+                            break;
+                        case TILE.FOREST_TREE:
+                            ctx.fillStyle = '#14532d';
+                            ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                            // Tree Canopy Details
+                            ctx.fillStyle = '#052e16';
+                            ctx.beginPath();
+                            ctx.arc(screenX + 16, screenY + 16, 14, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.fillStyle = '#16a34a';
+                            ctx.beginPath();
+                            ctx.arc(screenX + 14, screenY + 14, 10, 0, Math.PI * 2);
+                            ctx.fill();
+                            break;
+                        case TILE.WATER:
+                            ctx.fillStyle = '#0284c7';
+                            ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                            // Ripple accent
+                            ctx.fillStyle = '#38bdf8';
+                            ctx.fillRect(screenX + (Date.now()/50 % 20), screenY + 12, 6, 2);
+                            break;
+                        case TILE.FLOWER_PATCH:
+                            ctx.fillStyle = '#16a34a';
+                            ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                            // Flower dots
+                            ctx.fillStyle = '#f43f5e';
+                            ctx.fillRect(screenX + 8, screenY + 8, 4, 4);
+                            ctx.fillStyle = '#facc15';
+                            ctx.fillRect(screenX + 20, screenY + 18, 4, 4);
+                            break;
+                        case TILE.CAVERN_FLOOR:
+                            ctx.fillStyle = '#1e293b';
+                            ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                            ctx.fillStyle = '#334155';
+                            ctx.fillRect(screenX + 4, screenY + 4, 3, 3);
+                            break;
+                        case TILE.CAVERN_WALL:
+                            ctx.fillStyle = '#0f172a';
+                            ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                            ctx.fillStyle = '#1e293b';
+                            ctx.fillRect(screenX + 2, screenY + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                            break;
+                        case TILE.CRYSTAL_NODE:
+                            ctx.fillStyle = '#1e293b';
+                            ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                            // Crystal spike
+                            ctx.fillStyle = '#06b6d4';
+                            ctx.beginPath();
+                            ctx.moveTo(screenX + 16, screenY + 4);
+                            ctx.lineTo(screenX + 26, screenY + 26);
+                            ctx.lineTo(screenX + 6, screenY + 26);
+                            ctx.closePath();
+                            ctx.fill();
+                            break;
+                        case TILE.BIOME_GATEWAY:
+                            ctx.fillStyle = '#6366f1';
+                            ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                            ctx.fillStyle = '#a5b4fc';
+                            ctx.fillRect(screenX + 4, screenY + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+                            break;
+                    }
+                }
+            }
+
+            // Render Interactive Entities
+            // 1. Relics
+            relics.forEach(relic => {
+                if (relic.collected) return;
+                const rx = relic.x - camX;
+                const ry = relic.y - camY;
+                if (rx > -32 && rx < canvas.width + 32 && ry > -32 && ry < canvas.height + 32) {
+                    ctx.save();
+                    // Glow pulse
+                    const pulse = Math.sin(Date.now() / 200) * 3;
+                    ctx.fillStyle = relic.biome === 'Forest' ? 'rgba(52, 211, 153, 0.4)' : 'rgba(56, 189, 248, 0.4)';
+                    ctx.beginPath();
+                    ctx.arc(rx, ry, 12 + pulse, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = relic.biome === 'Forest' ? '#10b981' : '#38bdf8';
+                    ctx.beginPath();
+                    ctx.arc(rx, ry, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            });
+
+            // 2. Lore Shrines
+            loreShrines.forEach(shrine => {
+                const sx = shrine.x - camX;
+                const sy = shrine.y - camY;
+                if (sx > -32 && sx < canvas.width + 32 && sy > -32 && sy < canvas.height + 32) {
+                    ctx.fillStyle = '#818cf8';
+                    ctx.fillRect(sx - 8, sy - 12, 16, 24);
+                    ctx.fillStyle = '#c7d2fe';
+                    ctx.fillRect(sx - 5, sy - 9, 10, 18);
+                }
+            });
+
+            // 3. Chests
+            chests.forEach(chest => {
+                const cx = chest.x - camX;
+                const cy = chest.y - camY;
+                if (cx > -32 && cx < canvas.width + 32 && cy > -32 && cy < canvas.height + 32) {
+                    ctx.fillStyle = chest.opened ? '#64748b' : '#d97706';
+                    ctx.fillRect(cx - 10, cy - 8, 20, 16);
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.fillRect(cx - 3, cy - 3, 6, 6);
+                }
+            });
+
+            // 4. NPCs
+            npcs.forEach(npc => {
+                const nx = npc.x - camX;
+                const ny = npc.y - camY;
+                if (nx > -32 && nx < canvas.width + 32 && ny > -32 && ny < canvas.height + 32) {
+                    // NPC Body
+                    ctx.fillStyle = '#f43f5e';
+                    ctx.beginPath();
+                    ctx.arc(nx, ny, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Quest marker above head
+                    ctx.fillStyle = '#facc15';
+                    ctx.font = 'bold 12px sans-serif';
+                    ctx.fillText('!', nx - 2, ny - 14);
+                }
+            });
+
+            // Render Player Character
+            const px = player.x - camX;
+            const py = player.y - camY;
+
+            // Player Shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.beginPath();
+            ctx.ellipse(px, py + 10, 10, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Player Body
+            ctx.fillStyle = '#6366f1'; // Indigo Outfit
+            ctx.beginPath();
+            ctx.arc(px, py, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Player Backpack / Cloak Detail
+            ctx.fillStyle = '#4338ca';
+            ctx.beginPath();
+            ctx.arc(px, py - 2, 7, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Player Lantern Glow Core
+            ctx.fillStyle = '#fef08a';
+            ctx.beginPath();
+            ctx.arc(px + 4, py + 2, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Render Dynamic Ambient Day/Night & Lantern Lighting Mask
+            renderLightingAndFog(camX, camY);
+
+            // Render Particle Effects
+            updateAndDrawParticles(camX, camY);
+
+            // Render MiniMap
+            renderMiniMap();
+        }
+
+        // Lighting & Fog Overlay Engine
+        function renderLightingAndFog(camX, camY) {
+            // Create Offscreen Lighting Mask Overlay
+            const lightCanvas = document.createElement('canvas');
+            lightCanvas.width = canvas.width;
+            lightCanvas.height = canvas.height;
+            const lCtx = lightCanvas.getContext('2d');
+
+            // Fill base darkness (Night/Cavern ambient darkness)
+            const inCavern = player.x >= 31 * TILE_SIZE;
+            const darkness = inCavern ? 0.85 : 0.45;
+            lCtx.fillStyle = `rgba(3, 7, 18, ${darkness})`;
+            lCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Carve out Player Torch Glow
+            const px = player.x - camX;
+            const py = player.y - camY;
+            const grad = lCtx.createRadialGradient(px, py, 10, px, py, player.torchRadius);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            grad.addColorStop(0.6, 'rgba(255, 255, 255, 0.8)');
+            grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+            lCtx.globalCompositeOperation = 'destination-out';
+            lCtx.fillStyle = grad;
+            lCtx.beginPath();
+            lCtx.arc(px, py, player.torchRadius, 0, Math.PI * 2);
+            lCtx.fill();
+
+            // Draw Light Mask onto Main Canvas
+            ctx.drawImage(lightCanvas, 0, 0);
+
+            // Render Fog of War Blackout for Unexplored Tiles
+            const startCol = Math.max(0, Math.floor(camX / TILE_SIZE));
+            const endCol = Math.min(MAP_COLS - 1, Math.ceil((camX + canvas.width) / TILE_SIZE));
+            const startRow = Math.max(0, Math.floor(camY / TILE_SIZE));
+            const endRow = Math.min(MAP_ROWS - 1, Math.ceil((camY + canvas.height) / TILE_SIZE));
+
+            for (let r = startRow; r <= endRow; r++) {
+                for (let c = startCol; c <= endCol; c++) {
+                    const screenX = c * TILE_SIZE - camX;
+                    const screenY = r * TILE_SIZE - camY;
+                    const fogVal = fogMap[r][c];
+
+                    if (fogVal === 0) { // Unexplored
+                        ctx.fillStyle = '#020617';
+                        ctx.fillRect(screenX - 1, screenY - 1, TILE_SIZE + 2, TILE_SIZE + 2);
+                    } else if (fogVal === 1) { // Previously Explored (Dimmed)
+                        ctx.fillStyle = 'rgba(2, 6, 23, 0.55)';
+                        ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                    }
+                }
+            }
+        }
+
+        // MiniMap Renderer
+        function renderMiniMap() {
+            miniCtx.fillStyle = '#020617';
+            miniCtx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
+
+            const scaleX = miniCanvas.width / MAP_COLS;
+            const scaleY = miniCanvas.height / MAP_ROWS;
+
+            for (let r = 0; r < MAP_ROWS; r++) {
+                for (let c = 0; c < MAP_COLS; c++) {
+                    if (fogMap[r][c] > 0) {
+                        miniCtx.fillStyle = c < 31 ? '#059669' : '#0891b2';
+                        miniCtx.fillRect(c * scaleX, r * scaleY, scaleX + 0.5, scaleY + 0.5);
+                    }
+                }
+            }
+
+            // Draw Player Pin
+            const pTileX = player.x / TILE_SIZE;
+            const pTileY = player.y / TILE_SIZE;
+            miniCtx.fillStyle = '#fbbf24';
+            miniCtx.beginPath();
+            miniCtx.arc(pTileX * scaleX, pTileY * scaleY, 3, 0, Math.PI * 2);
+            miniCtx.fill();
+        }
+
+        // Full Map Modal Renderer
+        function renderFullMapModal() {
+            fullCtx.fillStyle = '#020617';
+            fullCtx.fillRect(0, 0, fullCanvas.width, fullCanvas.height);
+
+            const scaleX = fullCanvas.width / MAP_COLS;
+            const scaleY = fullCanvas.height / MAP_ROWS;
+
+            for (let r = 0; r < MAP_ROWS; r++) {
+                for (let c = 0; c < MAP_COLS; c++) {
+                    if (fogMap[r][c] > 0) {
+                        fullCtx.fillStyle = c < 31 ? '#10b981' : '#06b6d4';
+                        fullCtx.fillRect(c * scaleX, r * scaleY, scaleX + 0.5, scaleY + 0.5);
+                    } else {
+                        fullCtx.fillStyle = '#0f172a';
+                        fullCtx.fillRect(c * scaleX, r * scaleY, scaleX + 0.5, scaleY + 0.5);
+                    }
+                }
+            }
+
+            // Draw Relics on full map if collected
+            relics.forEach(relic => {
+                if (relic.collected) {
+                    const rx = (relic.x / TILE_SIZE) * scaleX;
+                    const ry = (relic.y / TILE_SIZE) * scaleY;
+                    fullCtx.fillStyle = '#f59e0b';
+                    fullCtx.fillRect(rx - 2, ry - 2, 4, 4);
+                }
+            });
+
+            // Draw Player Pin
+            const pTileX = player.x / TILE_SIZE;
+            const pTileY = player.y / TILE_SIZE;
+            fullCtx.fillStyle = '#facc15';
+            fullCtx.beginPath();
+            fullCtx.arc(pTileX * scaleX, pTileY * scaleY, 5, 0, Math.PI * 2);
+            fullCtx.fill();
+        }
+
+        // Codex UI Manager
+        function updateCodexUI() {
+            const relicsContainer = document.getElementById('view-relics');
+            const loreContainer = document.getElementById('view-lore');
+
+            relicsContainer.innerHTML = '';
+            loreContainer.innerHTML = '';
+
+            const collectedCount = relics.filter(r => r.collected).length;
+            document.getElementById('relic-tab-count').innerText = `${collectedCount}/${relics.length}`;
+
+            // Populate Relics Grid
+            relics.forEach(relic => {
+                const card = document.createElement('div');
+                card.className = `p-3.5 rounded-2xl border flex items-start gap-3 ${
+                    relic.collected 
+                        ? 'bg-slate-900/80 border-indigo-500/40 text-slate-200' 
+                        : 'bg-slate-900/30 border-slate-800 text-slate-500 opacity-60'
+                }`;
+                card.innerHTML = `
+                    <div class="w-10 h-10 rounded-xl ${relic.collected ? 'bg-indigo-600/20 text-indigo-400' : 'bg-slate-800 text-slate-600'} flex items-center justify-center text-lg flex-shrink-0">
+                        <i class="fa-solid ${relic.collected ? relic.icon : 'fa-lock'}"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold ${relic.collected ? 'text-white' : 'text-slate-500'}">${relic.collected ? relic.name : 'Unknown Artifact'}</div>
+                        <div class="text-[10px] text-slate-400 mt-0.5">${relic.collected ? relic.desc : 'Explore deeper to discover this relic.'}</div>
+                        <span class="inline-block mt-1.5 text-[9px] font-semibold px-2 py-0.5 rounded-full ${relic.biome === 'Forest' ? 'bg-emerald-950 text-emerald-400' : 'bg-cyan-950 text-cyan-400'}">${relic.biome}</span>
+                    </div>
+                `;
+                relicsContainer.appendChild(card);
+            });
+
+            // Populate Lore Shrines List
+            const readLoreCount = loreShrines.filter(s => s.read).length;
+            document.getElementById('lore-tab-count').innerText = `${readLoreCount}/${loreShrines.length}`;
+
+            loreShrines.forEach(shrine => {
+                const item = document.createElement('div');
+                item.className = `p-4 rounded-2xl border ${
+                    shrine.read ? 'bg-slate-900/80 border-indigo-500/30' : 'bg-slate-900/30 border-slate-800 opacity-60'
+                }`;
+                item.innerHTML = `
+                    <div class="flex items-center gap-2 mb-1">
+                        <i class="fa-solid fa-scroll text-indigo-400 text-xs"></i>
+                        <h4 class="text-xs font-bold ${shrine.read ? 'text-indigo-300' : 'text-slate-500'}">${shrine.read ? shrine.title : 'Unread Shrine Monument'}</h4>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">${shrine.read ? shrine.text : 'Find and interact with ancient shrines to record lore notes.'}</p>
+                `;
+                loreContainer.appendChild(item);
+            });
+        }
+
+        // Modal Handlers
+        const modalCodex = document.getElementById('modal-codex');
+        const modalMap = document.getElementById('modal-map');
+
+        document.getElementById('btn-codex').addEventListener('click', () => {
+            updateCodexUI();
+            modalCodex.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-map').addEventListener('click', () => {
+            renderFullMapModal();
+            modalMap.classList.remove('hidden');
+        });
+
+        document.querySelectorAll('.close-modal').forEach(btn => {
+            btn.addEventListener('click', () => {
+                modalCodex.classList.add('hidden');
+                modalMap.classList.add('hidden');
+            });
+        });
+
+        // Codex Tabs Switcher
+        const tabRelics = document.getElementById('tab-relics');
+        const tabLore = document.getElementById('tab-lore');
+        const tabStats = document.getElementById('tab-stats');
+
+        const viewRelics = document.getElementById('view-relics');
+        const viewLore = document.getElementById('view-lore');
+        const viewStats = document.getElementById('view-stats');
+
+        function switchTab(activeTab, activeView) {
+            [tabRelics, tabLore, tabStats].forEach(t => t.className = "px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200");
+            [viewRelics, viewLore, viewStats].forEach(v => v.classList.add('hidden'));
+
+            activeTab.className = "px-4 py-3 text-xs font-semibold text-indigo-400 border-b-2 border-indigo-500";
+            activeView.classList.remove('hidden');
+        }
+
+        tabRelics.addEventListener('click', () => switchTab(tabRelics, viewRelics));
+        tabLore.addEventListener('click', () => switchTab(tabLore, viewLore));
+        tabStats.addEventListener('click', () => switchTab(tabStats, viewStats));
+
+        // Sound Mute Toggle
+        document.getElementById('btn-sound').addEventListener('click', () => {
+            sound.muted = !sound.muted;
+            document.getElementById('sound-icon').className = sound.muted ? "fa-solid fa-volume-xmark text-rose-400" : "fa-solid fa-volume-high";
+        });
+
+        // Main Loop
+        function gameLoop() {
+            updatePlayer();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize Game Window
+        window.onload = function () {
+            resizeCanvas();
+            generateWorld();
+            updateCodexUI();
+            gameLoop();
+            showToast("Welcome Explorer! Move with WASD/Arrows", "fa-compass", "text-emerald-400");
+        };
+    </script>
+</body>
+</html>
